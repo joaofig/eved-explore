@@ -1,0 +1,13 @@
+{
+  "sequence": [
+    "tables",
+    "indices"
+  ],
+  "tables": [
+    "tables/signal.sql"
+  ],
+  "indices": [
+    "indices/ix_signal_vehicle_day_ts.sql",
+    "indices/ix_signal_vehicle_trip_ts.sql"
+  ]
+}
