@@ -3,6 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from db.api import EVedDb
 from geo.math import vec_bearings
+from pyquadkey2 import quadkey
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
@@ -74,8 +75,7 @@ def get_trips():
 
 def get_trip_locations(vehicle_id, trip_id):
     sql = """
-    select   max(signal_id)
-    ,        match_latitude
+    select   match_latitude
     ,        match_longitude
     ,        max(time_stamp)
     from     signal 
@@ -110,22 +110,33 @@ def update_bearing_mid(db, bearing, vehicle_id, trip_id, ts0, ts1):
     db.execute_sql(sql, [bearing, vehicle_id, trip_id, ts0, ts1])
 
 
+def update_quadkeys(db, vehicle_id, trip_id, locations, level=20):
+    sql = """
+    update signal set quadkey = ?
+    where  vehicle_id = ? and trip_id = ? and match_latitude = ? and match_longitude = ?
+    """
+    updates = [(quadkey.from_geo((p[0], p[1]), level).to_quadint() >> (64 - 2 * level), vehicle_id, trip_id, p[0], p[1]) for p in
+               locations]
+    db.execute_sql(sql, updates, many=True)
+
+
 def process_trip(vehicle_id, trip_id):
+    db = EVedDb()
+
     locations = get_trip_locations(vehicle_id, trip_id)
+    update_quadkeys(db, vehicle_id, trip_id, locations)
 
     if len(locations) > 2:
-        db = EVedDb()
-
-        lats = np.array([l[1] for l in locations])
-        lons = np.array([l[2] for l in locations])
+        lats = np.array([l[0] for l in locations])
+        lons = np.array([l[1] for l in locations])
 
         bearings = vec_bearings(lats, lons)
 
-        update_bearing_ini(db, bearings[0], vehicle_id, trip_id, locations[0][3])
-        update_bearing_end(db, bearings[-1], vehicle_id, trip_id, locations[-1][3])
+        update_bearing_ini(db, bearings[0], vehicle_id, trip_id, locations[0][2])
+        update_bearing_end(db, bearings[-1], vehicle_id, trip_id, locations[-1][2])
 
         for i in range(1, len(locations)):
-            update_bearing_mid(db, bearings[i-1], vehicle_id, trip_id, locations[i-1][3], locations[i][3])
+            update_bearing_mid(db, bearings[i-1], vehicle_id, trip_id, locations[i-1][2], locations[i][2])
 
 
 def main():
