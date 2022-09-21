@@ -148,7 +148,7 @@ def vec_bearings(latitudes: np.ndarray,
     delta_lons = r_lons[1:] - r_lons[:-1]
 
     y = np.multiply(np.sin(delta_lons), np.cos(r_lat1))
-    x = np.multiply(np.cos(r_lat0), np.sin(r_lat1)) - np.multiply(np.sin(r_lat0),
-                                                                  np.multiply(np.cos(r_lat1), np.cos(delta_lons)))
+    x = np.multiply(np.cos(r_lat0), np.sin(r_lat1)) - \
+        np.multiply(np.sin(r_lat0), np.multiply(np.cos(r_lat1), np.cos(delta_lons)))
     bearings = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
     return bearings

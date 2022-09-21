@@ -42,5 +42,7 @@ CREATE TABLE signal (
     focus_points        TEXT,
 
     bearing             DOUBLE,
-    quadkey             INTEGER
+    quadkey             INTEGER,
+    week_day            INTEGER,
+    day_slot            INTEGER
 );
