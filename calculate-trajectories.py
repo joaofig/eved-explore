@@ -72,20 +72,19 @@ def populate_trajectories():
     db.execute_sql(sql)
 
 
-def populate_links(level=20):
-    shift = (64 - 2 * level)
-
-    get_trajectories_sql = "select traj_id, vehicle_id, trip_id from trajectory;"
-
-    insert_links_sql = """
-    insert into link (traj_id, signal_ini, signal_end, bearing) values (?, ?, ?, ifnull(?, 0))
+def load_trajectories():
+    sql = """
+    select traj_id
+    ,      vehicle_id
+    ,      trip_id 
+    from   trajectory;
     """
+    db = EVedDb()
+    return db.query(sql)
 
-    insert_link_qks_sql = """
-    insert into link_qk (link_id, quadkey, density) values (?, ?, ?)
-    """
 
-    get_points_sql = """
+def load_trajectory_points(vehicle_id, trip_id):
+    sql = """
     select   max(signal_id)
     ,        match_latitude
     ,        match_longitude
@@ -95,27 +94,54 @@ def populate_links(level=20):
     group by match_latitude, match_longitude, bearing
     order by signal_id;
     """
-
     db = EVedDb()
-    trajectories = db.query(get_trajectories_sql)
+    return db.query(sql, [vehicle_id, trip_id])
+
+
+def insert_link(traj_id, signal_ini, signal_end, bearing):
+    sql = """
+    insert into link 
+        (traj_id, signal_ini, signal_end, bearing) 
+    values 
+        (?, ?, ?, ifnull(?, -1.0))
+    """
+    db = EVedDb()
+    db.execute_sql(sql, [traj_id, signal_ini, signal_end, bearing])
+    return db.query_scalar("select seq from sqlite_sequence where name = 'link';")
+
+
+def insert_link_quadkeys(link_quadkey_density_list):
+    sql = """
+    insert into link_qk 
+        (link_id, quadkey, density) 
+    values 
+        (?, ?, ?)
+    """
+    db = EVedDb()
+    db.execute_sql(sql, parameters=link_quadkey_density_list, many=True)
+
+
+def populate_links(level=20):
+    shift = 64 - 2 * level
+
+    trajectories = load_trajectories()
 
     for traj_id, vehicle_id, trip_id in tqdm(trajectories):
-        points = db.query(get_points_sql, [vehicle_id, trip_id])
+        points = load_trajectory_points(vehicle_id, trip_id)
 
         if len(points) > 1:
             for p0, p1 in pairwise(points):
                 signal_ini = p0[0]
                 signal_end = p1[0]
                 bearing = p1[3]
-                db.execute_sql(insert_links_sql, [traj_id, signal_ini, signal_end, bearing])
-
-                link_id = db.query_scalar("select seq from sqlite_sequence where name = 'link';")
+                link_id = insert_link(traj_id, signal_ini, signal_end, bearing)
 
                 loc0 = (p0[1], p0[2])
                 loc1 = (p1[1], p1[2])
                 line = get_qk_line(loc0, loc1, level)
-                query_params = [(link_id, pt[0].to_quadint() >> shift, pt[1]) for pt in line]
-                db.execute_sql(insert_link_qks_sql, query_params, many=True)
+
+                params = [(link_id, pt[0].to_quadint() >> shift, pt[1]) for pt in line]
+                insert_link_quadkeys(params)
 
 
 def main():
