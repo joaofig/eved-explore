@@ -68,6 +68,8 @@ def create_indices():
 
 
 def populate_trajectories():
+    print("Populate trajectories")
+
     sql = """
     insert into trajectory (vehicle_id, trip_id)
         select distinct vehicle_id, trip_id from signal;
@@ -77,6 +79,8 @@ def populate_trajectories():
 
 
 def load_trajectories():
+    print("Load trajectories")
+
     sql = """
     select traj_id
     ,      vehicle_id
@@ -126,6 +130,8 @@ def insert_link_quadkeys(link_quadkey_density_list):
 
 
 def populate_links(level=20):
+    print("Populate links")
+
     shift = 64 - 2 * level
 
     trajectories = load_trajectories()
