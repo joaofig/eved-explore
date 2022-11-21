@@ -145,18 +145,6 @@ class GraphRoute(object):
     def has_route(self):
         return self.route is not None
 
-    def get_route_quadkeys(self, level=20):
-        g = self.graph
-        qks = set()
-        shift = 64 - 2 * level
-        for n0, n1 in pairwise(self.route):
-            edge = g[n0][n1]
-            l0 = g.nodes[n0]
-            l1 = g.nodes[n1]
-            qks.update([(qk.to_quadint() >> shift, edge[0]['bearing'])
-                        for qk, _ in get_qk_line(l0, l1, level)])
-        return list(qks)
-
     def get_route_nodes(self):
         return [self.graph.nodes[n] for n in self.route]
 
@@ -238,11 +226,11 @@ def load_matching_links(traj_id, angle_delta=2.5):
     from       link_qk q
     inner join link l on l.link_id = q.link_id
     inner join (
-        select     q.quadkey
-        ,          l.bearing
-        from       link_qk q
-        inner join link l on l.link_id = q.link_id
-        where      l.traj_id = ?
+        select     qk.quadkey
+        ,          lk.bearing
+        from       link_qk qk
+        inner join link lk on lk.link_id = qk.link_id
+        where      lk.traj_id = ?
     ) x on x.quadkey = q.quadkey
     where l.bearing > 0 and x.bearing > 0 and cos(radians(x.bearing - l.bearing)) >= cos(radians(?));
     """
@@ -253,15 +241,21 @@ def load_matching_links(traj_id, angle_delta=2.5):
 class GraphTrajectory(object):
 
     def __init__(self, traj_id):
-        self.traj_id
+        assert isinstance(traj_id, int)
+        self.traj_id = int(traj_id)
 
-    def get_top_matching_trajectories(self, top=0.05):
+    def get_top_matching_trajectories(self, top=0.05, exclude_self=True):
         df = load_matching_links(self.traj_id)
-        trajectories = np.unique(df["traj_id"].values)
+
         query_set = set(df[df["traj_id"] == self.traj_id]["quadkey"].values)
 
+        if exclude_self:
+            df = df[df["traj_id"] != self.traj_id]
+
+        trajectories = np.unique(df["traj_id"].values)
         traj_df = pd.DataFrame(data=trajectories, columns=["traj_id"])
-        traj_df["similarity"] = [jaccard_similarity(query_set, set(df[df["traj_id"] == t]["quadkey"].values))
+        traj_df["similarity"] = [jaccard_similarity(query_set,
+                                                    set(df[df["traj_id"] == t]["quadkey"].values))
                                  for t in trajectories]
         traj_df["percent_rank"] = traj_df["similarity"].rank(pct=True)
 
@@ -269,9 +263,11 @@ class GraphTrajectory(object):
         trajectories = filtered_df["traj_id"].values
         return trajectories
 
-    def get_matching_links(self):
+    def get_matching_links(self, exclude_self=True):
         df = load_matching_links(self.traj_id)
+
+        if exclude_self:
+            df = df[df["traj_id"] != self.traj_id]
+
         links = np.unique(df["link_id"].values)
         return links
-
-

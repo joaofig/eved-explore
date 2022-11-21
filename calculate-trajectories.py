@@ -1,4 +1,3 @@
-
 from db.api import EVedDb
 from pyquadkey2 import quadkey
 from itertools import pairwise
@@ -57,10 +56,15 @@ def create_link_quadkey_table():
     db.execute_sql(sql)
 
 
-def create_link_qk_index():
-    index_sql = "CREATE INDEX ix_link_qk_quadkey ON link_qk (quadkey ASC);"
+def create_indices():
+    sql_script = ["CREATE INDEX ix_link_qk_quadkey ON link_qk (quadkey ASC);",
+                  "CREATE INDEX ix_link_traj ON link (traj_id ASC);",
+                  "CREATE INDEX ix_link_qk_link ON link_qk (link_id);"
+                  ]
     db = EVedDb()
-    db.execute_sql(index_sql)
+
+    for sql in sql_script:
+        db.execute_sql(sql)
 
 
 def populate_trajectories():
@@ -152,7 +156,7 @@ def main():
     populate_trajectories()
     populate_links()
 
-    create_link_qk_index()
+    create_indices()
 
 
 if __name__ == "__main__":
