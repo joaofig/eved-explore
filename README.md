@@ -11,7 +11,7 @@ in the `signal` table, while the second creates three more tables
 to support trajectory querying. Both scripts will take quite a long
 time to run.
 
-Once done you can run scripts number 5 and 6.
+Once done you can run notebook numbers 5 and 6.
 
 ## Medium Articles
 
