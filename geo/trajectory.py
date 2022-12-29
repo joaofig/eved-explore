@@ -93,6 +93,7 @@ def load_trajectory_points(traj_id):
     select     distinct
                s.match_latitude
     ,          s.match_longitude
+    ,          s.bearing
     from       signal s
     inner join trajectory t on s.vehicle_id = t.vehicle_id and s.trip_id = t.trip_id
     where      t.traj_id = ?

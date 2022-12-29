@@ -1,7 +1,9 @@
 import numpy as np
 import math
 
+from numba import njit
 
+@njit()
 def vec_haversine(lat1: np.ndarray,
                   lon1: np.ndarray,
                   lat2: np.ndarray,
@@ -32,6 +34,7 @@ def vec_haversine(lat1: np.ndarray,
     return meters
 
 
+@njit()
 def square_haversine(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     """
     Calculates a symmetrical square matrix of haversine distances between all the given locations
@@ -54,6 +57,7 @@ def square_haversine(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     return dist
 
 
+@njit()
 def num_haversine(lat1: float,
                   lon1: float,
                   lat2: float,
