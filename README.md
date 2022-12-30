@@ -11,8 +11,9 @@ in the `signal` table, while the second creates three more tables
 to support trajectory querying. Both scripts will take quite a long
 time to run.
 
-Once done you can run notebook numbers 5 and 6.
+Once done you can run notebook numbers 5, 6 and 7.
 
 ## Medium Articles
 
 [Travel Time Estimation Using Quadkeys](https://towardsdatascience.com/travel-time-estimation-using-quadkeys-ecf6d54823b4)
+[Trajectory Queries Using Space Partitioning](https://medium.com/towards-data-science/trajectory-queries-using-space-partitioning-773167d4184e)
