@@ -115,8 +115,8 @@ def update_quadkeys(db, vehicle_id, trip_id, locations, level=20):
     update signal set quadkey = ?
     where  vehicle_id = ? and trip_id = ? and match_latitude = ? and match_longitude = ?
     """
-    updates = [(quadkey.from_geo((p[0], p[1]), level).to_quadint() >> (64 - 2 * level), vehicle_id, trip_id, p[0], p[1]) for p in
-               locations]
+    updates = [(quadkey.from_geo((p[0], p[1]), level).to_quadint() >> (64 - 2 * level),
+                vehicle_id, trip_id, p[0], p[1]) for p in locations]
     db.execute_sql(sql, updates, many=True)
 
 

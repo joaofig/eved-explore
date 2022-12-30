@@ -86,18 +86,20 @@ def load_trajectory_quadkeys(traj_id):
     return qks
 
 
-def load_trajectory_points(traj_id):
+def load_trajectory_points(traj_id, unique=False):
     db = EVedDb()
 
-    sql = """
-    select     distinct
+    distinct = "distinct" if unique else ""
+
+    sql = f"""
+    select     {distinct}
                s.match_latitude
     ,          s.match_longitude
     ,          s.bearing
     from       signal s
     inner join trajectory t on s.vehicle_id = t.vehicle_id and s.trip_id = t.trip_id
     where      t.traj_id = ?
-    order by   s.signal_id;
+    order by   s.time_stamp;
     """
     return db.query(sql, [traj_id])
 
