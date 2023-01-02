@@ -7,7 +7,14 @@ from geo.spoke import GeoSpoke
 
 
 def download_road_network(place_name, network_type='drive'):
-    graph = ox.graph_from_place(place_name, network_type=network_type, simplify=False)
+    graph = ox.graph_from_bbox(42.325853, 42.220268, -83.804839, -83.673437,
+                               network_type=network_type,
+                               simplify=False,
+                               retain_all=True)
+    # graph = ox.graph_from_place(place_name,
+    #                             network_type=network_type,
+    #                             simplify=False,
+    #                             retain_all=True)
     graph = ox.add_edge_speeds(graph)
     graph = ox.add_edge_travel_times(graph)
     graph = ox.bearing.add_edge_bearings(graph)
