@@ -1,3 +1,5 @@
+from typing import Set, Tuple, Any
+
 import osmnx as ox
 import numpy as np
 
@@ -6,15 +8,28 @@ from math import radians, cos, sqrt
 from geo.spoke import GeoSpoke
 
 
-def download_road_network(place_name, network_type='drive'):
-    graph = ox.graph_from_bbox(42.325853, 42.220268, -83.804839, -83.673437,
+def download_road_network_bbox(north, south, east, west,
+                               network_type=None,
+                               custom_filter=None):
+    graph = ox.graph_from_bbox(north, south, east, west,
                                network_type=network_type,
+                               custom_filter=custom_filter,
                                simplify=False,
                                retain_all=True)
-    # graph = ox.graph_from_place(place_name,
-    #                             network_type=network_type,
-    #                             simplify=False,
-    #                             retain_all=True)
+    graph = ox.add_edge_speeds(graph)
+    graph = ox.add_edge_travel_times(graph)
+    graph = ox.bearing.add_edge_bearings(graph)
+    return graph
+
+
+def download_road_network(place_name,
+                          network_type=None,
+                          custom_filter=None):
+    graph = ox.graph_from_place(place_name,
+                                network_type=network_type,
+                                custom_filter=custom_filter,
+                                simplify=False,
+                                retain_all=True)
     graph = ox.add_edge_speeds(graph)
     graph = ox.add_edge_travel_times(graph)
     graph = ox.bearing.add_edge_bearings(graph)
@@ -28,6 +43,16 @@ def heron_area(a, b, c):
                 (c - (a - b)) *
                 (c + (a - b)) *
                 (a + (b - c))) / 4.0
+
+
+@njit()
+def heron_distance(a, b, c):
+    c, b, a = np.sort(np.array([a, b, c]))
+    area = sqrt((a + (b + c)) *
+                (c - (a - b)) *
+                (c + (a - b)) *
+                (a + (b - c))) / 4
+    return 2 * area / b
 
 
 def fix_edge_bearing(best_edge, bearing, graph):
@@ -62,68 +87,70 @@ class RoadNetwork(object):
         locations = np.array(list(zip(latitudes, longitudes)))
         return np.array(ids), locations
 
-    def get_matching_edge(self, latitude, longitude, bearing=None, tolerance=5.0):
+    def get_matching_edge(self, latitude, longitude,
+                          bearing=None, min_r=1.0):
+        best_edge = None
         loc = np.array([latitude, longitude])
         _, r = self.geo_spoke.query_knn(loc, 1)
-        radius = self.max_edge_length + r[0]
-        node_idx, dists = self.geo_spoke.query_radius(loc, radius)
-        nodes = self.ids[node_idx]
-        distances = dict(zip(nodes, dists))
-        adjacent_set = set()
-        graph = self.graph
+        if r > min_r:
+            radius = self.max_edge_length + r[0]
+            node_idx, dists = self.geo_spoke.query_radius(loc, radius)
+            nodes = self.ids[node_idx]
+            distances = dict(zip(nodes, dists))
+            tested_edges = set()
+            graph = self.graph
+            node_set = set(nodes)
 
-        best_edge = None
-        for node in nodes:
-            if node not in adjacent_set:
-                adjacent_nodes = np.intersect1d(np.array(graph.adj[node]),
-                                                nodes, assume_unique=True)
+            for node in nodes:
+                adjacent_nodes = node_set & set(graph.adj[node])
 
-                adjacent_set.update(adjacent_nodes)
                 for adjacent in adjacent_nodes:
-                    edge_length = graph[node][adjacent][0]['length']
-                    ratio = (distances[node] + distances[adjacent]) / \
-                            edge_length
-                    if best_edge is None or ratio < best_edge[2]:
-                        best_edge = (node, adjacent, ratio)
+                    if (node, adjacent) not in tested_edges:
+                        edge_length = graph[node][adjacent][0]['length']
+                        ratio = edge_length / (distances[node] + distances[adjacent])
 
-        if bearing is not None:
-            best_edge = fix_edge_bearing(best_edge, bearing, graph)
+                        if best_edge is None or ratio > best_edge[2]:
+                            best_edge = (node, adjacent, ratio)
+                        tested_edges.add((node, adjacent))
+                        tested_edges.add((adjacent, node))
+
+            if bearing is not None:
+                best_edge = fix_edge_bearing(best_edge, bearing, graph)
         return best_edge
 
-    def get_nearest_edge(self, latitude, longitude, bearing=None):
+    def get_nearest_edge(self, latitude, longitude,
+                         bearing=None, min_r=1.0):
         best_edge = None
-        adjacent_set = set()
-        graph = self.graph
-
         loc = np.array([latitude, longitude])
         _, r = self.geo_spoke.query_knn(loc, 1)
-        radius = self.max_edge_length + r[0]
-        node_idx, dists = self.geo_spoke.query_radius(loc, radius)
-        nodes = self.ids[node_idx]
-        distances = dict(zip(nodes, dists))
+        if r > min_r:
+            tested_edges = set()
+            graph = self.graph
+            radius = self.max_edge_length + r[0]
+            node_idx, dists = self.geo_spoke.query_radius(loc, radius)
+            nodes = self.ids[node_idx]
+            distances = dict(zip(nodes, dists))
+            node_set = set(nodes)
 
-        for node in nodes:
-            if node not in adjacent_set:
-                adjacent_nodes = np.intersect1d(np.array(graph.adj[node]),
-                                                nodes, assume_unique=True)
+            for node in nodes:
+                adjacent_nodes = node_set & set(graph.adj[node])
 
-                adjacent_set.update(adjacent_nodes)
                 for adjacent in adjacent_nodes:
-                    a = distances[node]
-                    b = graph[node][adjacent][0]['length']
-                    c = distances[adjacent]
+                    if (node, adjacent) not in tested_edges:
+                        a = distances[node]
+                        b = graph[node][adjacent][0]['length']
+                        c = distances[adjacent]
 
-                    a2, b2, c2 = a * a, b * b, c * c
+                        if b * b > a * a + c * c:
+                            distance = heron_distance(a, b, c)
+                        else:
+                            distance = min(a, c)
 
-                    if c2 > a2 + b2 or a2 > b2 + c2:
-                        distance = min(a, c)
-                    else:
-                        area = heron_area(a, b, c)
-                        distance = area * 2.0 / b
+                        if best_edge is None or distance < best_edge[2]:
+                            best_edge = (node, adjacent, distance)
+                        tested_edges.add((node, adjacent))
+                        tested_edges.add((adjacent, node))
 
-                    if best_edge is None or distance < best_edge[2]:
-                        best_edge = (node, adjacent, distance)
-
-        if bearing is not None:
-            best_edge = fix_edge_bearing(best_edge, bearing, graph)
+            if bearing is not None:
+                best_edge = fix_edge_bearing(best_edge, bearing, graph)
         return best_edge

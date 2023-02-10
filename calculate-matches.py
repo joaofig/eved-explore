@@ -19,10 +19,14 @@ def download_network(delta = 0.5):
     s = s - dv * delta
     e = e + dh * delta
     w = w - dh * delta
-    types = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential',
-             'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link']
+    types = ['motorway', 'trunk', 'primary', 'secondary',
+             'tertiary', 'residential', 'unclassified',
+             'motorway_link', 'trunk_link', 'primary_link',
+             'secondary_link', 'tertiary_link',
+             'living_street', 'service', 'road']
+    flt = f'["highway"~"{"|".join(types)}"]'
     rn = download_road_network_bbox(n, s, e, w,
-                                    custom_filter=f'["highway"~"{"|".join(types)}"]')
+                                    custom_filter=flt)
     return rn
 
 
@@ -69,8 +73,10 @@ def calculate_difference(rn, path, trajectory):
     p_loc = np.array([(rn.nodes[n]['y'], rn.nodes[n]['x']) for n in path])
     t_loc = np.array([(t[0], t[1]) for t in trajectory])
 
-    p_length = vec_haversine(p_loc[1:, 0], p_loc[1:, 1], p_loc[:-1, 0], p_loc[:-1, 1]).sum()
-    t_length = vec_haversine(t_loc[1:, 0], t_loc[1:, 1], t_loc[:-1, 0], t_loc[:-1, 1]).sum()
+    p_length = vec_haversine(p_loc[1:, 0], p_loc[1:, 1],
+                             p_loc[:-1, 0], p_loc[:-1, 1]).sum()
+    t_length = vec_haversine(t_loc[1:, 0], t_loc[1:, 1],
+                             t_loc[:-1, 0], t_loc[:-1, 1]).sum()
     return p_length - t_length
 
 
@@ -99,24 +105,29 @@ def process_trajectories():
             "errors": []
         }
 
+    save_counter = 0
     trajectories = state["trajectories"]
     while len(trajectories) > 0:
         trajectory_id = trajectories[0]
-        print(f"Trajectory: {trajectory_id}")
-        trajectory = load_trajectory_points(trajectory_id, unique=True)
+        trajectory = load_trajectory_points(trajectory_id,
+                                            unique=True)
         if len(trajectory) > 3:
             edges = match_edges(road_network, trajectory)
             path = build_path(rn, edges)
 
             if len(path) > 0:
                 diff = calculate_difference(rn, path, trajectory)
-                print(f"Difference: {diff}")
+                print(f"Trajectory: {trajectory_id}, Difference: {diff}")
                 state["errors"].append((trajectory_id, diff))
 
         trajectories = trajectories[1:]
         state["trajectories"] = trajectories
-        save_state(state)
 
+        save_counter += 1
+        if save_counter % 100 == 0:
+            save_state(state)
+
+    save_state(state)
 
 def main():
     process_trajectories()
