@@ -1,0 +1,16 @@
+{
+  "sequence": [
+    "tables",
+    "indices"
+  ],
+  "tables": [
+    "tables/h3_node.sql",
+    "tables/traj_h3.sql",
+    "tables/traj_match.sql",
+    "tables/triple.sql"
+  ],
+  "indices": [
+    "indices/traj_h3_traj_id_ix.sql",
+    "indices/triple_t0_t1_ix.sql"
+  ]
+}

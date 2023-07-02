@@ -33,7 +33,9 @@ class BaseDb(object):
     def connect(self):
         return sqlite3.connect(self.db_file_name, check_same_thread=False)
 
-    def execute_sql(self, sql, parameters=[], many=False):
+    def execute_sql(self, sql, parameters=None, many=False):
+        if parameters is None:
+            parameters = []
         conn = self.connect()
         cur = conn.cursor()
         if not many:
@@ -62,14 +64,18 @@ class BaseDb(object):
         return result
 
     @contextlib.contextmanager
-    def query_iterator(self, sql, parameters=[]):
+    def query_iterator(self, sql, parameters=None):
+        if parameters is None:
+            parameters = []
         conn = self.connect()
         cur = conn.cursor()
         yield cur.execute(sql, parameters)
         cur.close()
         conn.close()
 
-    def query_scalar(self, sql, parameters=[]):
+    def query_scalar(self, sql, parameters=None):
+        if parameters is None:
+            parameters = []
         res = self.query(sql, parameters)
         return res[0][0]
 
@@ -132,3 +138,12 @@ class EVedDb(BaseDb):
 
     def insert_signals(self, signals):
         self.insert_list("signal/insert", signals)
+
+
+class TrajDb(BaseDb):
+
+    def __init__(self, folder="./db"):
+        super().__init__(folder=folder, file_name="eved_traj.db")
+
+        if not os.path.exists(self.db_file_name):
+            self.create_schema(schema_dir='schema/eved_traj')
