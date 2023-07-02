@@ -39,7 +39,7 @@ def numba_query_radius(lat, lon, radius,
     return intersect[ix], dist[ix]
 
 
-def numba_query_knn(lat, lon, k, lat0, lon0, lat1, lon1, density,
+def spoke_query_knn(lat, lon, k, lat0, lon0, lat1, lon1, density,
                     idx0, idx1, sorted0, sorted1, lats, lons):
     d0 = num_haversine(lat, lon, lat0, lon0)
     d1 = num_haversine(lat, lon, lat1, lon1)
@@ -107,10 +107,10 @@ class GeoSpoke(object):
                                   self.lats, self.lons, self.sorted0, self.sorted1,
                                   self.idx0, self.idx1)
 
-    def query_knn(self, location: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
+    def query_knn(self, location: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
         lat = location[0]
         lon = location[1]
 
-        return numba_query_knn(lat, lon, k, self.lat0, self.lon0, self.lat1, self.lon1,
+        return spoke_query_knn(lat, lon, k, self.lat0, self.lon0, self.lat1, self.lon1,
                                self.density, self.idx0, self.idx1, self.sorted0, self.sorted1,
                                self.lats, self.lons)

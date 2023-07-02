@@ -3,19 +3,21 @@ from typing import Set, Tuple, Any
 import osmnx as ox
 import numpy as np
 
-from numba import njit
 from math import radians, cos, sqrt
 from geo.spoke import GeoSpoke
+from geo.cy_math import heron_area, heron_distance
 
 
 def download_road_network_bbox(north, south, east, west,
-                               network_type=None,
-                               custom_filter=None):
+                               network_type="all_private",
+                               custom_filter=None,
+                               simplify=False,
+                               retain_all=True):
     graph = ox.graph_from_bbox(north, south, east, west,
                                network_type=network_type,
                                custom_filter=custom_filter,
-                               simplify=False,
-                               retain_all=True)
+                               simplify=simplify,
+                               retain_all=retain_all)
     graph = ox.add_edge_speeds(graph)
     graph = ox.add_edge_travel_times(graph)
     graph = ox.bearing.add_edge_bearings(graph)
@@ -23,7 +25,7 @@ def download_road_network_bbox(north, south, east, west,
 
 
 def download_road_network(place_name,
-                          network_type=None,
+                          network_type="all_private",
                           custom_filter=None):
     graph = ox.graph_from_place(place_name,
                                 network_type=network_type,
@@ -36,25 +38,6 @@ def download_road_network(place_name,
     return graph
 
 
-@njit()
-def heron_area(a, b, c):
-    c, b, a = np.sort(np.array([a, b, c]))
-    return sqrt((a + (b + c)) *
-                (c - (a - b)) *
-                (c + (a - b)) *
-                (a + (b - c))) / 4.0
-
-
-@njit()
-def heron_distance(a, b, c):
-    c, b, a = np.sort(np.array([a, b, c]))
-    area = sqrt((a + (b + c)) *
-                (c - (a - b)) *
-                (c + (a - b)) *
-                (a + (b - c))) / 4
-    return 2 * area / b
-
-
 def fix_edge_bearing(best_edge, bearing, graph):
     if (best_edge[1], best_edge[0], 0) in graph.edges:
         bearing0 = radians(graph[best_edge[0]][best_edge[1]][0]['bearing'])
@@ -63,6 +46,7 @@ def fix_edge_bearing(best_edge, bearing, graph):
         if cos(bearing1 - gps_bearing) > cos(bearing0 - gps_bearing):
             best_edge = (best_edge[1], best_edge[0], best_edge[2])
     return best_edge
+
 
 class RoadNetwork(object):
 
@@ -73,6 +57,15 @@ class RoadNetwork(object):
                                     for e in graph.edges])
         self.ids, self.locations = self.get_locations()
         self.geo_spoke = GeoSpoke(self.locations)
+
+
+    def save(self, file_name: str) -> None:
+        ox.io.save_graphml(self.graph, file_name)
+
+    @classmethod
+    def from_file(cls, file_name: str):
+        graph = ox.io.load_graphml(file_name)
+        return RoadNetwork(graph, projected=False)
 
     def get_locations(self):
         latitudes = []
@@ -87,12 +80,12 @@ class RoadNetwork(object):
         locations = np.array(list(zip(latitudes, longitudes)))
         return np.array(ids), locations
 
-    def get_matching_edge(self, latitude, longitude,
+    def get_matching_edge(self, latitude: float, longitude: float,
                           bearing=None, min_r=1.0):
         best_edge = None
         loc = np.array([latitude, longitude])
         _, r = self.geo_spoke.query_knn(loc, 1)
-        if r > min_r:
+        if r.min() > min_r:
             radius = self.max_edge_length + r[0]
             node_idx, dists = self.geo_spoke.query_radius(loc, radius)
             nodes = self.ids[node_idx]
@@ -123,7 +116,7 @@ class RoadNetwork(object):
         best_edge = None
         loc = np.array([latitude, longitude])
         _, r = self.geo_spoke.query_knn(loc, 1)
-        if r > min_r:
+        if r.min() > min_r:
             tested_edges = set()
             graph = self.graph
             radius = self.max_edge_length + r[0]

@@ -129,8 +129,8 @@ def jaccard_similarity(set0, set1):
 
 class GraphRoute(object):
 
-    def __init__(self, place_name, network_type='drive'):
-        self.graph = ox.graph_from_place(place_name, network_type=network_type, simplify=False)
+    def __init__(self, graph):
+        self.graph = graph
         self.graph = ox.add_edge_speeds(self.graph)
         self.graph = ox.add_edge_travel_times(self.graph)
         self.graph = ox.bearing.add_edge_bearings(self.graph)
