@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 import folium
 import streamlit as st
@@ -12,6 +14,56 @@ from db.api import TrajDb
 from folium.plugins import Draw
 from folium.vector_layers import PolyLine
 from collections import Counter
+
+
+def get_hex_location(h: int) -> tuple[float, float]:
+    db = TrajDb()
+    sql = "select lat, lon from h3_node where h3=?"
+    return db.query(sql, [h])[0]
+
+
+def locations_from_hex_list(hex_list: np.ndarray) -> list[(float, float)]:
+    return [get_hex_location(int(h)) for h in hex_list]
+
+
+
+class PredictedPath():
+    def __init__(self,
+                 probability: float = 1.0,
+                 step: int = 1,
+                 size: int = 0):
+
+        self.probability = probability
+        self.step = step
+        self.size = size
+        self.array: np.ndarray = np.zeros(size, dtype=int)
+
+    def __lt__(self, other):
+        return self.probability < other.probability
+
+    @classmethod
+    def from_seed(cls, h0: int, h1: int, size: int):
+        path =  PredictedPath(probability=1.0,
+                              step=2,
+                              size=size)
+        path.array[0:2] = [h0, h1]
+        return path
+
+    def get_polyline(self):
+        return PolyLine(locations=locations_from_hex_list(self.array),
+                        color="red",
+                        opacity=0.5,
+                        popup=f"{self.probability * 100:.2f}%")
+
+def evolve_path(self: PredictedPath,
+                h0: int,
+                probability: float):
+    path = PredictedPath(probability=self.probability * probability,
+                         step=self.step+1,
+                         size=self.size)
+    path.array = self.array.copy()
+    path.array[self.step] = h0
+    return path
 
 
 def fit_bounding_box(folium_map, bb_list):
@@ -88,15 +140,35 @@ def map_match(actor: Actor, points: list) -> str:
     return route["matchings"][0]["geometry"]
 
 
+def get_cache_successors(h0: int, h1: int) -> Counter | None:
+    if "successors" in st.session_state:
+        successors = st.session_state["successors"]
+        p = (h0, h1)
+        if p in successors:
+            return successors[p]
+    return None
+
+
+def set_cache_successors(h0: int, h1: int, cnt: Counter):
+    if "successors" not in st.session_state:
+        st.session_state["successors"] = dict()
+    st.session_state["successors"][(h0, h1)] = cnt
+
+
 def get_successors(h0: int, h1: int) -> Counter:
-    db = TrajDb()
-    sql = "select t2 from triple where t0=? and t1=?"
-    successors = [r[0] for r in db.query(sql, [int(h0), int(h1)])]
-    return Counter(successors)
+    cnt = get_cache_successors(h0, h1)
+    if cnt is None:
+        db = TrajDb()
+        sql = "select t2 from triple where t0=? and t1=?"
+        successors = [r[0] for r in db.query(sql, [int(h0), int(h1)])]
+        cnt = Counter(successors)
+
+        set_cache_successors(h0, h1, cnt)
+    return cnt
 
 
-def predict_probability(hex_list: list) -> float:
-    nodes = hex_list[1:-1]
+def compute_probability(token_list: list[int]) -> float:
+    nodes = token_list[1:-1]
     prob = 0.0
     if len(nodes) > 2:
         prob = 1.0
@@ -110,62 +182,58 @@ def predict_probability(hex_list: list) -> float:
     return prob
 
 
-def expand_hex_list(hex_list: list[int],
-                    max_branch: int = 3) -> list[(float,list[int])]:
-    successors = get_successors(hex_list[-2], hex_list[-1])
+def expand_path(path: PredictedPath,
+                max_branch: int = 3) -> list[PredictedPath]:
+    successors = get_successors(path.array[path.step-2], path.array[path.step-1])
     best_expansions = []
     total = successors.total()
     for p in successors.most_common(max_branch):
-        list_copy = hex_list.copy()
-        list_copy.append(p[0])
-        best_expansions.append((p[1] / total, list_copy))
-    return sorted(best_expansions, reverse=True)
+        new_probability = p[1] / total
+        new_path = evolve_path(path, p[0], new_probability)
+        best_expansions.append(new_path)
+    return best_expansions
 
 
 def expand_seed(h0: int, h1: int,
                 max_branch: int = 3,
-                max_length: int = 10):
-    paths = expand_hex_list([h0, h1], max_branch)
-    while len(paths[0][1]) < max_length:
+                max_length: int = 10) -> list[PredictedPath]:
+    final = []
+    seed = PredictedPath.from_seed(h0, h1, max_length)
+    paths = expand_path(seed, max_branch)
+    while len(final) < max_branch:
         expanded = []
         for p in paths:
-            expanded.extend(expand_hex_list(p[1], max_branch=max_branch))
-        paths = sorted(expanded, reverse=True)
-    return paths
+            expanded.extend(expand_path(p, max_branch=max_branch))
+        paths = sorted(expanded, reverse=True).copy()
 
-
-def get_hex_location(hex: int) -> tuple[float, float]:
-    db = TrajDb()
-    sql = "select lat, lon from h3_node where h3=?"
-    return db.query(sql, [hex])[0]
-
-
-def locations_from_hex_list(hex_list: list[int]) -> list[(float, float)]:
-    return [get_hex_location(h) for h in hex_list]
-
-
-def polyline_from_hex_list(hex_list: list[int]) -> PolyLine:
-    return PolyLine(locations=locations_from_hex_list(hex_list),
-                    color="red",
-                    opacity=0.5)
+        filtered = []
+        for p in paths[:max_branch]:
+            if p.step == max_length:
+                final.append(p)
+            else:
+                filtered.append(p)
+        paths = filtered.copy()
+    return final
 
 
 def predict(max_branch: int = 3,
             max_length: int = 10) -> FeatureGroup | None:
     fg = folium.FeatureGroup(name="polylines")
 
-    if "hex_list" in st.session_state:
-        hex_list = st.session_state["hex_list"]
-        seed = hex_list[-3:-1]
+    if "token_list" in st.session_state:
+        token_list = st.session_state["token_list"]
+        seed = token_list[-3:-1]
         if len(seed) > 1:
-            paths = expand_seed(seed[0], seed[1])
+            paths = expand_seed(seed[0], seed[1],
+                                max_branch=max_branch,
+                                max_length=max_length)
 
-            for path in paths:
-                fg.add_child(polyline_from_hex_list(path[1]))
+            for path in paths[:max_branch]:
+                fg.add_child(path.get_polyline())
     return fg
 
 
-def handle_map_data(folium_map, map_data: dict):
+def handle_map_data(map_data: dict):
     st.session_state["map_data"] = map_data
 
     config = get_config(tile_extract='./valhalla/custom_files/valhalla_tiles.tar', verbose=True)
@@ -177,12 +245,12 @@ def handle_map_data(folium_map, map_data: dict):
                 path = map_match(actor, drawing["geometry"]["coordinates"])
                 # st.write(decode_polyline(path))
                 hex_list = [h3.geo_to_h3(lat, lng, 15) for lng, lat in decode_polyline(path)]
-                st.write(predict_probability(hex_list))
+                st.write(compute_probability(hex_list))
 
-                st.session_state["hex_list"] = hex_list
+                st.session_state["token_list"] = hex_list
     else:
-        if "hex_list" in st.session_state:
-            del st.session_state["hex_list"]
+        if "token_list" in st.session_state:
+            del st.session_state["token_list"]
 
 
 def main():
@@ -193,17 +261,19 @@ def main():
 
         max_branch = st.number_input("Maximum branch:", min_value=1, max_value=10, value=3)
 
-        max_length = st.number_input("Maximum edge expansion:", min_value=1, max_value=50, value=10)
+        max_length = st.number_input("Maximum edge expansion:", min_value=1, max_value=100, value=10)
 
         if st.button("Predict"):
             feature_group = predict(max_branch=max_branch,
                                     max_length=max_length)
+        if st.button("Clear"):
+            feature_group = folium.FeatureGroup(name="polylines")
 
     m = create_map()
-    map_data = st_folium(m, width=1024,
+    map_data = st_folium(m, key="map", width=1024,
                          feature_group_to_add=feature_group)
 
-    handle_map_data(m, map_data)
+    handle_map_data(map_data)
 
     # st.write(map_data)
 
