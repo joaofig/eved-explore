@@ -1,7 +1,8 @@
 import numpy as np
 import math
 
-from numba import njit
+from numba import njit, prange
+
 
 @njit()
 def vec_haversine(lat1: np.ndarray,
@@ -32,6 +33,28 @@ def vec_haversine(lat1: np.ndarray,
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
     meters = earth_radius * c
     return meters
+
+
+@njit()
+def matrix_haversine(lat1: np.ndarray,
+                     lon1: np.ndarray,
+                     lat2: np.ndarray,
+                     lon2: np.ndarray) -> np.ndarray:
+    matrix = np.zeros((lat1.shape[0], lat2.shape[0]))
+    for i in prange(lat1.shape[0]):
+        matrix[i,:] = vec_haversine(lat2, lon2, lat1[i], lon1[i])
+    return matrix
+
+
+@njit()
+def outer_haversine(lat1: np.ndarray,
+                    lon1: np.ndarray,
+                    lat2: np.ndarray,
+                    lon2: np.ndarray) -> np.ndarray:
+    matrix = np.zeros((lat1.shape[0], lat2.shape[0]))
+    for i in prange(lat1.shape[0]):
+        matrix[i,:] = vec_haversine(lat2, lon2, lat1[i], lon1[i])
+    return matrix
 
 
 @njit()
@@ -156,3 +179,20 @@ def vec_bearings(latitudes: np.ndarray,
         np.multiply(np.sin(r_lat0), np.multiply(np.cos(r_lat1), np.cos(delta_lons)))
     bearings = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
     return bearings
+
+
+def heron_area(a: float, b: float, c: float) -> float:
+    c, b, a = np.sort(np.array([a, b, c]))
+    return math.sqrt((a + (b + c)) *
+                     (c - (a - b)) *
+                     (c + (a - b)) *
+                     (a + (b - c))) / 4.0
+
+
+def heron_distance(a: float, b: float, c: float) -> float:
+    c, b, a = np.sort(np.array([a, b, c]))
+    area: float = math.sqrt((a + (b + c)) *
+                            (c - (a - b)) *
+                            (c + (a - b)) *
+                            (a + (b - c))) / 4
+    return 2 * area / b
