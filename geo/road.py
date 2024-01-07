@@ -5,7 +5,7 @@ import numpy as np
 
 from math import radians, cos, sqrt
 from geo.spoke import GeoSpoke
-from geo.cy_math import heron_area, heron_distance
+from geo.math import heron_area, heron_distance
 
 
 def download_road_network_bbox(north, south, east, west,
@@ -53,11 +53,10 @@ class RoadNetwork(object):
     def __init__(self, graph, projected=False):
         self.graph = graph
         self.projected = projected
-        self.max_edge_length = max([graph[e[0]][e[1]][0]["length"] \
+        self.max_edge_length = max([graph[e[0]][e[1]][0]["length"]
                                     for e in graph.edges])
         self.ids, self.locations = self.get_locations()
         self.geo_spoke = GeoSpoke(self.locations)
-
 
     def save(self, file_name: str) -> None:
         ox.io.save_graphml(self.graph, file_name)
