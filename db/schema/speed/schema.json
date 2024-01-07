@@ -1,0 +1,12 @@
+{
+  "sequence": [
+    "tables",
+    "indices"
+  ],
+  "tables": [
+    "tables/segment.sql"
+  ],
+  "indices": [
+    "indices/segment_h3_ix.sql"
+  ]
+}
