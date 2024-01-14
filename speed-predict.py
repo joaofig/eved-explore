@@ -1,19 +1,16 @@
 from itertools import pairwise
 
-import numpy as np
 import streamlit as st
 import folium
 import h3.api.numpy_int as h3
 
-from common.mapspeed import get_edge_speeds
+from common.mapspeed import get_edge_times
 from common.streamlit import fit_map
-from db.api import SpeedDb, TrajDb
 from folium import FeatureGroup
 from folium.plugins import Draw
 from folium.vector_layers import PolyLine
 from streamlit_folium import st_folium
 
-from geo.math import num_haversine
 from valhalla import Actor, get_config
 from valhalla.utils import decode_polyline
 
@@ -34,7 +31,7 @@ def create_map():
 
     Draw(export=True,
          draw_options=draw_options).add_to(folium_map)
-    folium_map = fit_map(folium_map)
+    folium_map = fit_map(folium_map, show_border=True)
     return folium_map
 
 
@@ -55,13 +52,17 @@ def get_actor() -> Actor:
 
 def time_maneuvers(maneuvers: list) -> list:
     for m in maneuvers:
+        total_map_time = 0.0
+        total_avg_time = 0.0
+        total_med_time = 0.0
+
         locations = m["locations"]
         for step in m["steps"]:
             ix_ini = step["begin_shape_index"]
             ix_end = step["end_shape_index"]
-            # time = step["time"]
 
-            min_time, med_time, max_time = 0.0, 0.0, 0.0
+            total_map_time += step["time"]
+            min_time, avg_time, med_time, max_time = 0.0, 0.0, 0.0, 0.0
 
             for i0, i1 in pairwise(range(ix_ini, ix_end + 1)):
                 loc0 = locations[i0]
@@ -70,20 +71,32 @@ def time_maneuvers(maneuvers: list) -> list:
                 h3_ini = h3.geo_to_h3(*loc0, 15)
                 h3_end = h3.geo_to_h3(*loc1, 15)
 
-                min_speed, med_speed, max_speed = get_edge_speeds(h3_ini, h3_end)
+                min_dt, avg_dt, med_dt, max_dt, n = get_edge_times(h3_ini, h3_end)
 
-                if min_speed > 0.0:
-                    distance = num_haversine(*loc0, *loc1)
-
-                    max_time += distance / min_speed
-                    med_time += distance / med_speed
-                    min_time += distance / max_speed
-                else:
-                    st.sidebar.write(h3_ini, h3_end)
+                if min_dt > 0.0:
+                    max_time += max_dt
+                    med_time += med_dt
+                    avg_time += avg_dt
+                    min_time += min_dt
+                # else:
+                #     st.sidebar.write(h3_ini, h3_end)
 
             step["max_time"] = max_time
             step["med_time"] = med_time
+            step["avg_time"] = avg_time
             step["min_time"] = min_time
+
+            if avg_time == med_time == 0.0:
+                avg_time = med_time = step["time"]
+
+            total_avg_time += avg_time
+            total_med_time += med_time
+
+            m["time"] = {
+                "map": total_map_time,
+                "avg": total_avg_time,
+                "med": total_med_time
+            }
 
     return maneuvers
 
@@ -135,8 +148,9 @@ def main():
         else:
             st.button("Clear")
 
-    # Compare the predicted route with the existing speed samples
-    st.write(time_maneuvers(maneuvers))
+        # Compare the predicted route with the existing speed samples
+        st.write(time_maneuvers(maneuvers))
+
 
 
 main()
