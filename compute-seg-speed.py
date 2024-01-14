@@ -46,7 +46,8 @@ def generate_segments(trajectory: Trajectory,
 
 
 def main():
-    config = get_config(tile_extract='./valhalla/custom_files/valhalla_tiles.tar', verbose=True)
+    config = get_config(tile_extract='./valhalla/custom_files/valhalla_tiles.tar',
+                        verbose=True)
 
     trips = get_all_trips()
 
