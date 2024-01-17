@@ -11,7 +11,7 @@ from db.api import EVedDb
 from itertools import pairwise
 
 
-def download_network(delta = 0.5):
+def download_network(delta=0.5):
     n, s, e, w = 42.325853, 42.220268, -83.673437, -83.804839
     dv = n - s
     dh = e - w
@@ -128,6 +128,7 @@ def process_trajectories():
             save_state(state)
 
     save_state(state)
+
 
 def main():
     process_trajectories()

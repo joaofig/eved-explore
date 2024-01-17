@@ -92,7 +92,7 @@ class GeoSpoke(object):
 
     def query_radius(self,
                      location: np.ndarray,
-                     r: float) -> np.ndarray:
+                     r: float) -> tuple[np.ndarray, np.ndarray]:
         """
         Selects the indices of the points that lie within a given distance from
         a given location.

@@ -16,6 +16,7 @@ class Segment:
     h3_end: int
     dt: float
     day_num: float
+    time_stamp: int
     traj_id: int
 
     def to_tuple(self):
@@ -26,9 +27,10 @@ def insert_segments(segments: list[Segment]) -> None:
     db = SpeedDb()
     sql = """
     INSERT INTO segment 
-        (h3_ini, h3_end, dt, day_num, traj_id)
+        (h3_ini, h3_end, dt, day_num, time_stamp, traj_id)
     VALUES 
-        (?, ?, ?, ?, ?)"""
+        (?, ?, ?, ?, ?, ?)
+    """
     db.execute_sql(sql,
                    [segment.to_tuple() for segment in segments],
                    many=True)
@@ -41,7 +43,10 @@ def generate_segments(trajectory: Trajectory,
     for i in range(trajectory.dt.shape[0]):
         h3_ini = h3.geo_to_h3(trajectory.lat[i], trajectory.lon[i], 15)
         h3_end = h3.geo_to_h3(trajectory.lat[i + 1], trajectory.lon[i + 1], 15)
-        segments.append(Segment(h3_ini, h3_end, trajectory.dt[i], day_num, traj_id))
+        segments.append(Segment(h3_ini, h3_end,
+                                trajectory.dt[i], day_num,
+                                int(trajectory.time[i]),
+                                traj_id))
     return segments
 
 

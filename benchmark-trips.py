@@ -6,8 +6,9 @@ from valhalla.utils import decode_polyline
 
 from common.models import Trajectory, CompoundTrajectory
 from geo.mapping import map_match
+from geo.math import num_haversine
 from valhalla import get_config, Actor
-from common.mapspeed import get_all_trips, get_trip_signals, get_edge_times
+from common.mapspeed import get_all_trips, get_trip_signals, get_edge_times, update_dt_and_speed
 
 SAMPLE_SIZE = 1000
 
@@ -17,10 +18,10 @@ def main():
 
     all_trips = get_all_trips()
 
-    samples = random.sample(all_trips, SAMPLE_SIZE)
+    # samples = random.sample(all_trips, SAMPLE_SIZE)
 
     output = []
-    for traj_id, vehicle_id, trip_id in samples:
+    for traj_id, vehicle_id, trip_id in all_trips[:SAMPLE_SIZE]:
         signal_df = get_trip_signals(vehicle_id, trip_id)
 
         lat_array = signal_df["match_latitude"].to_numpy()
@@ -28,7 +29,7 @@ def main():
 
         trajectory = Trajectory(lat=lat_array,
                                 lon=lon_array,
-                                time=signal_df["time_stamp"].values)
+                                time=signal_df["time_stamp"].to_numpy())
 
         actor = Actor(config=config)
         try:
@@ -41,23 +42,32 @@ def main():
 
         compound = CompoundTrajectory(trajectory, polyline[:,0], polyline[:,1])
         converted = compound.to_trajectory()
+        distances = converted.distances()
 
         zero_count = 0
         trip_time_min, trip_time_avg, trip_time_med, trip_time_max  = 0.0, 0.0, 0.0, 0.0
+        min_speed, avg_speed, med_speed, max_speed = 0.0, 0.0, 0.0, 0.0
         total_samples = 0
         for i in range(converted.dt.shape[0]):
             h3_ini = h3.geo_to_h3(converted.lat[i], converted.lon[i], 15)
             h3_end = h3.geo_to_h3(converted.lat[i+1], converted.lon[i+1], 15)
 
             min_dt, avg_dt, med_dt, max_dt, sample_count = get_edge_times(h3_ini, h3_end, traj_id)
+
+            d = float(distances[i])
+            if sample_count == 0:
+                zero_count += 1
+
+            avg_dt, avg_speed = update_dt_and_speed(d, avg_dt, avg_speed)
+            med_dt, med_speed = update_dt_and_speed(d, med_dt, med_speed)
+            min_dt, min_speed = update_dt_and_speed(d, min_dt, min_speed)
+            max_dt, max_speed = update_dt_and_speed(d, max_dt, max_speed)
+
             trip_time_min += min_dt
             trip_time_avg += avg_dt
             trip_time_med += med_dt
             trip_time_max += max_dt
             total_samples += sample_count
-
-            if min_dt == med_dt == max_dt == 0.0:
-                zero_count += 1
 
         if converted.dt.shape[0]:
             output.append((traj_id,

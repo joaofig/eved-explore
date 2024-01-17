@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from numba import njit
 from db.api import SpeedDb, EVedDb
 
 
@@ -35,7 +36,10 @@ def get_edge_speeds(h3_ini: int, h3_end: int, traj_id=-1) -> tuple[float, float,
         return 0.0, 0.0, 0.0
 
 
-def get_edge_times(h3_ini: int, h3_end: int, traj_id=-1) -> tuple[float, float, float, float, int]:
+def get_edge_times(h3_ini: int,
+                   h3_end: int,
+                   traj_id=-1,
+                   min_samples=1) -> tuple[float, float, float, float, int]:
     db = SpeedDb()
     sql = """
         select dt 
@@ -44,14 +48,16 @@ def get_edge_times(h3_ini: int, h3_end: int, traj_id=-1) -> tuple[float, float, 
     """
     df = db.query_df(sql, (h3_ini, h3_end, traj_id))
 
-    if df.shape[0] > 0:
+    if df.shape[0] >= min_samples:
         dt_array = df["dt"].to_numpy()
         std_dt = np.std(dt_array)
         avg_dt = np.mean(dt_array)
-        return (max(avg_dt - 2 * std_dt, np.min(dt_array)),
+        min_dt = max(avg_dt - 2 * std_dt, np.min(dt_array))
+        max_dt = avg_dt + 2 * std_dt
+        return (min_dt,
                 avg_dt,
                 np.median(dt_array),
-                avg_dt + 2 * std_dt,
+                max_dt,
                 df.shape[0])
     else:
         return 0, 0, 0, 0, 0
@@ -70,3 +76,13 @@ def get_trip_signals(vehicle_id: int, trip_id: int) -> pd.DataFrame:
         order by day_num, time_stamp
     """
     return db.query_df(sql, (vehicle_id, trip_id))
+
+@njit
+def update_dt_and_speed(distance: float,
+                        dt: float,
+                        speed: float) -> tuple[float,float]:
+    if dt > 0.0:
+        speed = distance / dt
+    elif speed > 0.0:
+        dt = distance / speed
+    return dt, speed

@@ -4,5 +4,6 @@ CREATE TABLE segment (
     h3_end      INTEGER NOT NULL,
     dt          FLOAT NOT NULL,
     day_num     FLOAT NOT NULL,
+    time_stamp  INTEGER NOT NULL,
     traj_id     INTEGER NOT NULL
 );

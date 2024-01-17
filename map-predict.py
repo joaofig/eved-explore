@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import numpy as np
 import folium
 import streamlit as st
@@ -7,6 +5,9 @@ import h3.api.numpy_int as h3
 from folium import FeatureGroup
 
 from valhalla.utils import decode_polyline
+
+from common.streamlit import fit_map
+from geo.mapping import map_match
 from valhalla import Actor, get_config
 
 from streamlit_folium import st_folium
@@ -26,8 +27,7 @@ def locations_from_hex_list(hex_list: np.ndarray) -> list[(float, float)]:
     return [get_hex_location(int(h)) for h in hex_list]
 
 
-
-class PredictedPath():
+class PredictedPath:
     def __init__(self,
                  probability: float = 1.0,
                  step: int = 1,
@@ -78,19 +78,6 @@ def fit_bounding_box(folium_map, bb_list):
     return folium_map
 
 
-def fit_map(folium_map):
-    db = TrajDb()
-    sql = """
-    select min(lat) as min_lat
-    ,      max(lat) as max_lat
-    ,      min(lon) as min_lon
-    ,      max(lon) as max_lon
-    from   h3_node;"""
-    min_lat, max_lat, min_lon, max_lon = db.query(sql)[0]
-    folium_map.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
-    return folium_map
-
-
 def create_map():
     folium_map = folium.Map(prefer_canvas=True,
                             # tiles="cartodbpositron",
@@ -109,35 +96,6 @@ def create_map():
          draw_options=draw_options).add_to(folium_map)
     folium_map = fit_map(folium_map)
     return folium_map
-
-
-def map_match(actor: Actor, points: list) -> str:
-    param = {
-        "use_timestamps": False,
-        "shortest": True,
-        "shape_match": "walk_or_snap",
-        "shape": [{"lat": pt[1], "lon": pt[0]} for pt in points],
-        "costing": "auto",
-        "format": "osrm",
-        "directions_options": {
-            "directions_type": "none"
-        },
-        "trace_options": {
-            "search_radius": 50,
-            "max_search_radius": 200,
-            "gps_accuracy": 10,
-            "breakage_distance": 2000,
-            "turn_penalty_factor": 1
-        },
-        "costing_options": {
-            "auto": {
-                "country_crossing_penalty": 2000.0,
-                "maneuver_penalty": 30
-            }
-        }
-    }
-    route = actor.trace_route(param)
-    return route["matchings"][0]["geometry"]
 
 
 def get_cache_successors(h0: int, h1: int) -> Counter | None:
@@ -254,6 +212,8 @@ def handle_map_data(map_data: dict):
 
 
 def main():
+    st.set_page_config(layout="wide")
+
     feature_group = None
 
     with st.sidebar:

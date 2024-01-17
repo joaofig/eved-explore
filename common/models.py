@@ -117,4 +117,11 @@ class CompoundTrajectory:
         lon = np.concatenate([self._trim_array(segment.lon) for segment in self.segments])
         time = np.concatenate([self._trim_array(segment.time) for segment in self.segments])
 
+        # Remove duplicates
+        diff_lat = np.where(np.diff(lat) == 0)[0]
+
+        lat = np.delete(lat, diff_lat)
+        lon = np.delete(lon, diff_lat)
+        time = np.delete(time, diff_lat)
+
         return Trajectory(lat=lat, lon=lon, time=time)

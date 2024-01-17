@@ -4,13 +4,14 @@ import streamlit as st
 import folium
 import h3.api.numpy_int as h3
 
-from common.mapspeed import get_edge_times
+from common.mapspeed import get_edge_times, update_dt_and_speed
 from common.streamlit import fit_map
 from folium import FeatureGroup
 from folium.plugins import Draw
 from folium.vector_layers import PolyLine
 from streamlit_folium import st_folium
 
+from geo.math import num_haversine
 from valhalla import Actor, get_config
 from valhalla.utils import decode_polyline
 
@@ -63,6 +64,7 @@ def time_maneuvers(maneuvers: list) -> list:
 
             total_map_time += step["time"]
             min_time, avg_time, med_time, max_time = 0.0, 0.0, 0.0, 0.0
+            min_speed, avg_speed, med_speed, max_speed = 0.0, 0.0, 0.0, 0.0
 
             for i0, i1 in pairwise(range(ix_ini, ix_end + 1)):
                 loc0 = locations[i0]
@@ -73,13 +75,16 @@ def time_maneuvers(maneuvers: list) -> list:
 
                 min_dt, avg_dt, med_dt, max_dt, n = get_edge_times(h3_ini, h3_end)
 
-                if min_dt > 0.0:
-                    max_time += max_dt
-                    med_time += med_dt
-                    avg_time += avg_dt
-                    min_time += min_dt
-                # else:
-                #     st.sidebar.write(h3_ini, h3_end)
+                d = num_haversine(*loc0, *loc1)
+                avg_dt, avg_speed = update_dt_and_speed(d, avg_dt, avg_speed)
+                med_dt, med_speed = update_dt_and_speed(d, med_dt, med_speed)
+                min_dt, min_speed = update_dt_and_speed(d, min_dt, min_speed)
+                max_dt, max_speed = update_dt_and_speed(d, max_dt, max_speed)
+
+                max_time += max_dt
+                med_time += med_dt
+                avg_time += avg_dt
+                min_time += min_dt
 
             step["max_time"] = max_time
             step["med_time"] = med_time
