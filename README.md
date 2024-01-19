@@ -18,3 +18,7 @@ Once done you can run notebook numbers 5, 6 and 7.
 [Travel Time Estimation Using Quadkeys](https://towardsdatascience.com/travel-time-estimation-using-quadkeys-ecf6d54823b4)
 
 [Trajectory Queries Using Space Partitioning](https://medium.com/towards-data-science/trajectory-queries-using-space-partitioning-773167d4184e)
+
+[Map-Matching for Trajectory Prediction](https://towardsdatascience.com/map-matching-for-trajectory-prediction-be307a1547f0)
+
+[Map-Matching for Speed Prediction](https://medium.com/towards-data-science/map-matching-for-speed-prediction-f1a534626368)
