@@ -3,9 +3,10 @@ import pandas as pd
 
 from numba import njit
 from db.api import SpeedDb, EVedDb
+from typing import List, Tuple
 
 
-def get_all_trips() -> list[(int, int, int)]:
+def get_all_trips() -> List[(int, int, int)]:
     db = EVedDb()
     sql = "SELECT traj_id, vehicle_id, trip_id FROM trajectory"
     return db.query(sql)
@@ -80,7 +81,7 @@ def get_trip_signals(vehicle_id: int, trip_id: int) -> pd.DataFrame:
 @njit
 def update_dt_and_speed(distance: float,
                         dt: float,
-                        speed: float) -> tuple[float,float]:
+                        speed: float) -> Tuple[float,float]:
     if dt > 0.0:
         speed = distance / dt
     elif speed > 0.0:

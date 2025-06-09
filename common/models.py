@@ -1,7 +1,8 @@
 import numpy as np
 
 from geo.math import vec_haversine, num_haversine
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass
+from typing import List, Tuple
 
 
 class Trajectory:
@@ -44,8 +45,8 @@ class LatLon:
     def haversine(self, lat: float, lon: float) -> float:
         return num_haversine(self.lat, self.lon, lat, lon)
 
-    def to_tuple(self):
-        return astuple(self)
+    def to_tuple(self) -> Tuple[float, float]:
+        return self.lat, self.lon
 
 
 def merge_trajectory(trajectory: Trajectory,
@@ -100,7 +101,7 @@ class CompoundTrajectory:
         t0 = 0
         merged = merge_trajectory(trajectory, map_lat, map_lon)
         for i, segment in enumerate(merged):
-            dt = trajectory.dt[i]
+            dt = float(trajectory.dt[i])
             tr = segment_to_trajectory(segment, dt, t0)
             self.segments.append(tr)
             t0 = tr.time[-1]

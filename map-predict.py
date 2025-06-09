@@ -142,7 +142,7 @@ def compute_probability(token_list: list[int]) -> float:
 
 def expand_path(path: PredictedPath,
                 max_branch: int = 3) -> list[PredictedPath]:
-    successors = get_successors(path.array[path.step-2], path.array[path.step-1])
+    successors = get_successors(int(path.array[path.step-2]), int(path.array[path.step-1]))
     best_expansions = []
     total = successors.total()
     for p in successors.most_common(max_branch):
